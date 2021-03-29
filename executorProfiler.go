@@ -1,4 +1,4 @@
-// +build !GRAPHQL_PROFILE
+// +build GRAPHQL_PROFILE
 
 package graphql
 
@@ -9,10 +9,14 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
+	"go.uber.org/zap"
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
 )
+
+
 
 type ExecuteParams struct {
 	Schema        Schema
@@ -648,12 +652,28 @@ func resolveField(eCtx *executionContext, parentType *Object, source interface{}
 		eCtx.Errors = append(eCtx.Errors, extErrs...)
 	}
 
+	logger, _ := zap.NewProduction()
+	if CalibrationNanos == 0 {
+		calibrate()
+	}
+	CurrentFieldDepth +=1
+	startNanos := CurrentExecutionNanos()
 	result, resolveFnError = resolveFn(ResolveParams{
 		Source:  source,
 		Args:    args,
 		Info:    info,
 		Context: eCtx.Context,
 	})
+	endNanos := CurrentExecutionNanos()
+	calbratedTime := GetCalibratedExecutionTime(startNanos, endNanos)
+	CurrentFieldDepth -=1
+	logger.Info(
+		"Profile",
+		zap.String("F",parentType.PrivateName+"."+fieldName),
+		zap.Bool("E", !(resolveFnError==nil)),
+		zap.Int64("C", calbratedTime),
+		zap.Int("D",CurrentFieldDepth))
+	logger.Sync()
 
 	extErrs = resolveFieldFinishFn(result, resolveFnError)
 	if len(extErrs) != 0 {
@@ -1076,4 +1096,34 @@ func orderedFields(fields map[string][]*ast.Field) []*orderedField {
 	}
 
 	return orderedFields
+}
+
+
+/// PROFILER CODE
+const samples = 1000
+var CalibrationNanos = int64(0)
+var CurrentFieldDepth = 0
+
+func CurrentExecutionNanos() int64{
+	return time.Now().UnixNano()
+}
+
+func GetCalibratedExecutionTime(nanoStart int64, nanoStop int64) int64{
+	return (nanoStop-nanoStart)-CalibrationNanos
+}
+
+func calibrate(){
+	logger, _ := zap.NewProduction()
+	logger.Info("Calibrating stopwatch",zap.Int("Sample Size", samples))
+	var totalTime int64
+	for i := 0; i < samples; i++{
+		time1 := CurrentExecutionNanos()
+		time2 := CurrentExecutionNanos()
+		time3 := CurrentExecutionNanos()
+		// I know that this can be algebraically simplified, but
+		// this way makes it so that the linter doesn't yell at me.
+		totalTime += (time2-time1)+(time3-time2)
+	}
+	CalibrationNanos = totalTime / (2*samples)
+	logger.Info("Stopwatch calibrated",zap.Int64("Calibration Nano Offset",CalibrationNanos))
 }
