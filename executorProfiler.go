@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
+	"go.uber.org/zap"
 )
 
 
@@ -652,7 +652,8 @@ func resolveField(eCtx *executionContext, parentType *Object, source interface{}
 		eCtx.Errors = append(eCtx.Errors, extErrs...)
 	}
 
-	logger, _ := zap.NewProduction()
+	logger,_ := zap.NewDevelopment()
+	logger = logger.Sugar()
 	if CalibrationNanos == 0 {
 		calibrate()
 	}
