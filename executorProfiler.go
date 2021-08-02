@@ -652,8 +652,8 @@ func resolveField(eCtx *executionContext, parentType *Object, source interface{}
 		eCtx.Errors = append(eCtx.Errors, extErrs...)
 	}
 
-	logger,_ := zap.NewDevelopment()
-	logger = logger.Sugar()
+	loggerd,_ := zap.NewDevelopment()
+	logger := loggerd.Sugar()
 	if CalibrationNanos == 0 {
 		calibrate()
 	}
